@@ -1,15 +1,33 @@
-from fastapi import FastAPI, HTTPException
-from app.schemas import ChatRequest, ChatResponse
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+
+from app.schemas import ChatRequest
 from app.openrouter_client import chat_completion, settings
 
-app = FastAPI(title="Minerva  API", version="0.1")
+app = FastAPI(title="Minerva API", version="0.1")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-
-@app.post("/chat", response_model=ChatResponse)
+# ✅ streaming only
+@app.post("/chat")
 async def chat(req: ChatRequest):
     model = req.model or settings.OPENROUTER_MODEL
 
@@ -20,14 +38,13 @@ async def chat(req: ChatRequest):
         "max_tokens": req.max_tokens,
     }
 
-    try:
-        data = await chat_completion(payload)
+    async def event_generator():
+        try:
+            async for chunk in chat_completion(payload):
+                # SSE event
+                yield f"data: {chunk}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f"data: [ERROR] {str(e)}\n\n"
 
-        # OpenAI-style response shape: choices[0].message.content
-        reply = data["choices"][0]["message"]["content"]
-        return ChatResponse(model=model, reply=reply)
-
-    except KeyError:
-        raise HTTPException(status_code=502, detail=f"Unexpected response shape from OpenRouter: {data}")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"OpenRouter error: {str(e)}")
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
