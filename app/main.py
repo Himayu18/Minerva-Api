@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from app.schemas import ChatRequest
-from app.openrouter_client import chat_completion, settings
+from app.provider.openrouter_client import chat_completion, settings
 
 app = FastAPI(title="Minerva API", version="0.1")
 
