@@ -4,8 +4,10 @@ from fastapi.responses import StreamingResponse
 
 from app.schemas import ChatRequest
 from app.provider.openrouter_client import chat_completion, settings
-
+import json
+from app.auth.router import router as auth_router
 app = FastAPI(title="Minerva API", version="0.1")
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,10 +43,12 @@ async def chat(req: ChatRequest):
     async def event_generator():
         try:
             async for chunk in chat_completion(payload):
-                # SSE event
-                yield f"data: {chunk}\n\n"
+                # ✅ JSON keeps "\n" safe as "\\n" in a single SSE line
+                yield f"data: {json.dumps({'delta': chunk})}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: [ERROR] {str(e)}\n\n"
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
