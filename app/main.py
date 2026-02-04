@@ -6,6 +6,11 @@ from app.schemas import ChatRequest
 from app.provider.openrouter_client import chat_completion, settings
 import json
 from app.auth.router import router as auth_router
+
+from app.auth.database import Base, engine
+from app.auth.models import User  # important: imports model so Base knows it
+
+
 app = FastAPI(title="Minerva API", version="0.1")
 app.include_router(auth_router)
 
@@ -23,6 +28,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+Base.metadata.create_all(bind=engine)
 
 @app.get("/health")
 def health():
@@ -50,5 +57,8 @@ async def chat(req: ChatRequest):
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+
 
 
